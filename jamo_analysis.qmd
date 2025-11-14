@@ -20,14 +20,53 @@ library(dplyr)
 
 
 ```{r}
-
 unique <- unique_database
+```
+
+```{r}
 
 selected <- unique |>
   select("Jamo_Rule_Matrix")
 
-selected[1,]
+glimpse(selected[1,])
 
+# nearly 50% of all words and phrases in the database of hangul words contain the Jamo Unicode U+1100
+unique |>
+  summarize(prop_included = mean(str_detect(Jamo_Cleaned_Unicode, "U\\+1100")))
+  
+
+only_U_1100 <- unique |>
+  filter(str_detect(Jamo_Cleaned_Unicode, "U\\+1100"))
+
+exclude_U_1100 <- unique |>
+  filter(!str_detect(Jamo_Cleaned_Unicode, "U\\+1100"))
+
+```
+
+
+```{r}
+
+rules_summary <- only_U_1100 |>
+  mutate(rule_sums = map(Jamo_Rule_Matrix, ~ colSums(.x[,-1], na.rm = TRUE))) |>
+  pull(rule_sums) |>
+  bind_rows() |>
+  summarize(across(everything(), sum))
+
+```
+
+```{r}
+U_1100_rules_counts <- rules_summary |>
+  pivot_longer(everything(), names_to = "rule", values_to = "count")
+
+ggplot(U_1100_rules_counts, aes(x = reorder(rule, count), y = count)) +
+  geom_col() +
+  coord_flip() + 
+  labs(
+    x = "Counts",
+    y = "Rule",
+    title = "Rules in order of frequency of words/phrases containing U+1100"
+  ) +
+  theme_minimal()
 
 ```
 
