@@ -7,17 +7,13 @@ editor: visual
 
 ## Quarto
 
-
 ```{r}
 library(tidyverse)
 library(ggplot2)
 library(stringr)
 library(dplyr)
+library(purrr)
 ```
-
-
-
-
 
 ```{r}
 unique <- unique_database
@@ -30,7 +26,6 @@ selected <- unique |>
 
 glimpse(selected[1,])
 
-# nearly 50% of all words and phrases in the database of hangul words contain the Jamo Unicode U+1100
 unique |>
   summarize(prop_included = mean(str_detect(Jamo_Cleaned_Unicode, "U\\+1100")))
   
@@ -42,7 +37,6 @@ exclude_U_1100 <- unique |>
   filter(!str_detect(Jamo_Cleaned_Unicode, "U\\+1100"))
 
 ```
-
 
 ```{r}
 
@@ -62,11 +56,47 @@ ggplot(U_1100_rules_counts, aes(x = reorder(rule, count), y = count)) +
   geom_col() +
   coord_flip() + 
   labs(
-    x = "Counts",
-    y = "Rule",
+    x = "Rule",
+    y = "Counts",
     title = "Rules in order of frequency of words/phrases containing U+1100"
   ) +
   theme_minimal()
 
 ```
+
+
+```{r}
+# nearly 50% of all words and phrases in the database of hangul words contain the Jamo Unicode U+1100
+unicode_list <- unique |>
+  mutate(uc = str_extract_all(Jamo_Cleaned_Unicode, "U\\+[0-9A-F]{4}")) |>
+  unnest(uc) |>
+  distinct(uc) |>
+  pull(uc)
+
+unicode_proportions <- vector("list", length(unicode_list))
+
+for (i in seq_along(unicode_list)) {
+  u <- unicode_list[i]
+    
+  unicode_proportions[[i]] <- tibble(
+    unicode = u,
+    prop_included = mean(str_detect(unique[["Jamo_Cleaned_Unicode"]], fixed(u)))
+  )
+}
+
+unicode_df <- bind_rows(unicode_proportions)
+
+ggplot(unicode_df, aes(x = reorder(unicode, prop_included), y = prop_included)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    x = "Proportion Included",
+    y = "Jamo Unicode",
+    title = "Proportion of Each Unicode in the Dataset"
+  )
+
+```
+
+
 
