@@ -269,33 +269,33 @@ ggsave("clean_uni_rule_prop.pdf", plot = clean_uni_rule_prop, width = 8, height 
 ```{r}
 # GRAMMATICAL PARTS
 
-
+# pulling all instances of unique grammatical parts to iterate over later
 grammatical_parts <- clean_unique |>
   separate_rows(품사, sep = "\\s*,\\s*") |>
   pull(품사) |>
   unique()
 
-# split grammatical parts into multiple rows
-clean_unique_pos <- clean_unique |>
+# split grammatical parts into multiple rows/observations with a single grammatical part
+clean_unique_parts <- clean_unique |>
   separate_rows(품사, sep = "\\s*,\\s*")
 
-# total frequency per grammatical part (baseline)
-pos_totals <- clean_unique_pos |>
+# calculating frequency by grammatical part to account for a word's relevance in Hangul
+parts_totals <- clean_unique_parts |>
   group_by(품사) |>
-  summarise(total_freq = sum(freq), .groups = "drop")
+  summarize(total_freq = sum(freq), .groups = "drop")
 
-# rule × 품사 proportions
-rule_pos_prop <- map_dfr(rules, function(r) {
+# function to calculate the proportion of each grammatical part is removed when a specific rule is removed
+rule_parts_prop <- map_dfr(rules, function(r) {
 
   affected <- map_lgl(
-    clean_unique_pos$Jamo_Rule_Matrix,
+    clean_unique_parts$Jamo_Rule_Matrix,
     ~ any(.x[, r] == 1)
   )
 
-  clean_unique_pos[affected, ] |>
+  clean_unique_parts[affected, ] |>
     group_by(품사) |>
-    summarise(removed_freq = sum(freq), .groups = "drop") |>
-    left_join(pos_totals, by = "품사") |>
+    summarize(removed_freq = sum(freq), .groups = "drop") |>
+    left_join(parts_totals, by = "품사") |>
     mutate(
       rule = r,
       prop_removed = removed_freq / total_freq
@@ -303,11 +303,11 @@ rule_pos_prop <- map_dfr(rules, function(r) {
     select(품사, rule, prop_removed)
 })
 
-
-walk(grammatical_parts, function(pos) {
+# iterate through each grammatical part and plot its respective proportions removed by each rule
+walk(grammatical_parts, function(part) {
 
   p <- ggplot(
-    rule_pos_prop |> filter(품사 == pos),
+    rule_parts_prop |> filter(품사 == part),
     aes(x = reorder(rule, prop_removed), y = prop_removed)
   ) +
     geom_col() +
@@ -316,7 +316,7 @@ walk(grammatical_parts, function(pos) {
     labs(
       x = "Rule Removed",
       y = "Proportion of Grammatical Part Removed",
-      title = paste("Effect of Rule Removal —", pos)
+      title = paste("Effect of Rule Removal —", part)
     )
 
   print(p)
@@ -325,42 +325,30 @@ walk(grammatical_parts, function(pos) {
 
 
 ```{r}
-# 1. Explode grammatical parts and Jamo unicodes
+# Grammatical Parts by Jamo Unicode
+
+# splitting up cells with multiple grammatical parts and Jamo unicode into individual rows
 clean_unique_long <- clean_unique |>
   separate_rows(품사, sep = "\\s*,\\s*") |>
-  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+") |>
-  filter(Jamo_Cleaned_Unicode != "")
+  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+")
 
-# 2. Baseline totals per grammatical part
-pos_totals <- clean_unique_long |>
-  group_by(품사) |>
-  summarise(
-    total_freq = sum(freq),
-    .groups = "drop"
-  )
-
-# 3. Proportion of each grammatical part removed by each Jamo unicode
-jamo_pos_prop <- clean_unique_long |>
+# calculating proportion of a grammatical part is removed when a specific rule is removed
+jamo_parts_prop <- clean_unique_long |>
   group_by(품사, Jamo_Cleaned_Unicode) |>
-  summarise(
+  summarize(
     removed_freq = sum(freq),
     .groups = "drop"
   ) |>
-  left_join(pos_totals, by = "품사") |>
+  left_join(parts_totals, by = "품사") |>
   mutate(
     prop_removed = removed_freq / total_freq
   ) |>
   rename(jamo_unicode = Jamo_Cleaned_Unicode)
 
-# 4. Extract grammatical parts (for plotting)
-grammatical_parts <- jamo_pos_prop |>
-  distinct(품사) |>
-  pull(품사)
+# iterating through each unique grammatical part and plotting each distribution plot
+walk(grammatical_parts, function(parts) {
 
-# 5. Plot: one plot per grammatical part
-walk(grammatical_parts, function(pos) {
-
-  df <- jamo_pos_prop |> filter(품사 == pos)
+  df <- jamo_parts_prop |> filter(품사 == parts)
   if (nrow(df) == 0) return(NULL)
 
   p <- ggplot(
@@ -374,7 +362,7 @@ walk(grammatical_parts, function(pos) {
     labs(
       x = "Jamo Unicode Removed",
       y = "Proportion of Grammatical Part Removed",
-      title = paste("Effect of Jamo Unicode Removal —", pos)
+      title = paste("Effect of Jamo Unicode Removal —", parts)
     )
 
   print(p)
@@ -386,32 +374,33 @@ walk(grammatical_parts, function(pos) {
 ```{r}
 # WORD ORIGINS
 
+# pulling unique word origins
 word_origins <- clean_unique |>
   separate_rows(고유어_여부, sep = "\\s*,\\s*") |>
   pull(고유어_여부) |>
   unique()
 
-# split grammatical parts into multiple rows
-clean_unique_pos <- clean_unique |>
+# split word origins into multiple rows
+clean_unique_origins <- clean_unique |>
   separate_rows(고유어_여부, sep = "\\s*,\\s*")
 
-# total frequency per grammatical part (baseline)
-pos_totals <- clean_unique_pos |>
+# calculating total frequencies for each word origin category
+origin_totals <- clean_unique_origins |>
   group_by(고유어_여부) |>
-  summarise(total_freq = sum(freq), .groups = "drop")
+  summarize(total_freq = sum(freq), .groups = "drop")
 
-# rule × 품사 proportions
-rule_pos_prop <- map_dfr(rules, function(r) {
+# calculating proportion of each word origin category removed when a specific rule is removed
+rule_origin_prop <- map_dfr(rules, function(r) {
 
   affected <- map_lgl(
-    clean_unique_pos$Jamo_Rule_Matrix,
+    clean_unique_origins$Jamo_Rule_Matrix,
     ~ any(.x[, r] == 1)
   )
 
-  clean_unique_pos[affected, ] |>
+  clean_unique_origins[affected, ] |>
     group_by(고유어_여부) |>
-    summarise(removed_freq = sum(freq), .groups = "drop") |>
-    left_join(pos_totals, by = "고유어_여부") |>
+    summarize(removed_freq = sum(freq), .groups = "drop") |>
+    left_join(origin_totals, by = "고유어_여부") |>
     mutate(
       rule = r,
       prop_removed = removed_freq / total_freq
@@ -419,11 +408,11 @@ rule_pos_prop <- map_dfr(rules, function(r) {
     select(고유어_여부, rule, prop_removed)
 })
 
-
-walk(word_origins, function(pos) {
+# iterating through each word origin category and creating a plot displaying the proportion of a word origin category removed when a rule is removed
+walk(word_origins, function(origin) {
 
   p <- ggplot(
-    rule_pos_prop |> filter(고유어_여부 == pos),
+    rule_origin_prop |> filter(고유어_여부 == origin),
     aes(x = reorder(rule, prop_removed), y = prop_removed)
   ) +
     geom_col() +
@@ -431,8 +420,8 @@ walk(word_origins, function(pos) {
     theme_minimal() +
     labs(
       x = "Rule Removed",
-      y = "Proportion of Grammatical Part Removed",
-      title = paste("Effect of Rule Removal —", pos)
+      y = "Proportion of Word Origin Removed",
+      title = paste("Effect of Rule Removal —", origin)
     )
 
   print(p)
@@ -441,42 +430,30 @@ walk(word_origins, function(pos) {
 ```
 
 ```{r}
-# 1. Explode grammatical parts and Jamo unicodes
-clean_unique_long <- clean_unique |>
+# Word Origins by Jamo Unicode
+
+# creating a dataframe with each origin category and unicode split into separate rows
+clean_unique_origins_unicode <- clean_unique |>
   separate_rows(고유어_여부, sep = "\\s*,\\s*") |>
-  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+") |>
-  filter(Jamo_Cleaned_Unicode != "")
+  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+")
 
-# 2. Baseline totals per grammatical part
-pos_totals <- clean_unique_long |>
-  group_by(고유어_여부) |>
-  summarise(
-    total_freq = sum(freq),
-    .groups = "drop"
-  )
-
-# 3. Proportion of each grammatical part removed by each Jamo unicode
-jamo_pos_prop <- clean_unique_long |>
+# calculating proportion of each word origin category removed when a Jamo unicode is removed
+jamo_origins_prop <- clean_unique_origins_unicode |>
   group_by(고유어_여부, Jamo_Cleaned_Unicode) |>
-  summarise(
+  summarize(
     removed_freq = sum(freq),
     .groups = "drop"
   ) |>
-  left_join(pos_totals, by = "고유어_여부") |>
+  left_join(origin_totals, by = "고유어_여부") |>
   mutate(
     prop_removed = removed_freq / total_freq
   ) |>
   rename(jamo_unicode = Jamo_Cleaned_Unicode)
 
-# 4. Extract grammatical parts (for plotting)
-word_origins <- jamo_pos_prop |>
-  distinct(고유어_여부) |>
-  pull(고유어_여부)
+# iterating through each word origin category and creating a plot displaying the proportion of a word origin category removed when a unicode is removed
+walk(word_origins, function(origin) {
 
-# 5. Plot: one plot per grammatical part
-walk(word_origins, function(pos) {
-
-  df <- jamo_pos_prop |> filter(고유어_여부 == pos)
+  df <- jamo_origins_prop |> filter(고유어_여부 == origin)
   if (nrow(df) == 0) return(NULL)
 
   p <- ggplot(
@@ -489,8 +466,8 @@ walk(word_origins, function(pos) {
     theme_minimal() +
     labs(
       x = "Jamo Unicode Removed",
-      y = "Proportion of Grammatical Part Removed",
-      title = paste("Effect of Jamo Unicode Removal —", pos)
+      y = "Proportion of Word Origins Removed",
+      title = paste("Effect of Jamo Unicode Removal —", origin)
     )
 
   print(p)
