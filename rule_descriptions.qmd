@@ -1,0 +1,28 @@
+---
+title: "rule_descriptions"
+format: html
+---
+
+```{r}
+library(readr)
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+```
+
+```{r}
+rule_descriptions <- read.csv("Rule_descriptions_Hangul.csv")
+hangul_letters <- read.csv("Letters_Hangul.csv")
+all_rules <- read.csv("all-rule-data.csv")
+```
+
+```{r}
+# pulling rule numbers as numeric values to match "all_rules" values
+rule_binary <- as.numeric(substring(colnames(hangul_letters)[-c(1, 2)], 2))
+
+# filtering for Hangul's best set of rules and their descriptions
+best_set_descriptions <- all_rules |>
+  filter(Rule.Binary %in% rule_binary)
+```
+

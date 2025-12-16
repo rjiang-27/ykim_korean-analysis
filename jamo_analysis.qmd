@@ -5,7 +5,7 @@ format: pdf
 editor: visual
 ---
 
-## Quarto
+
 
 ```{r}
 library(tidyverse)
@@ -16,73 +16,53 @@ library(purrr)
 ```
 
 ```{r}
-unique <- unique_database
-```
-
-```{r}
-# Checking the forms of the Jamo_Rule_Matrix column
-selected <- unique |>
-  select("Jamo_Rule_Matrix")
-
-glimpse(selected[1,])
-
-# nearly 50% of all words and phrases in the database of hangul words contain the Jamo Unicode U+1100
-unique |>
-  summarize(prop_included = mean(str_detect(Jamo_Cleaned_Unicode, "U\\+1100")))
-
-only_U_1100 <- unique |>
-  filter(str_detect(Jamo_Cleaned_Unicode, "U\\+1100"))
-
-exclude_U_1100 <- unique |>
-  filter(!str_detect(Jamo_Cleaned_Unicode, "U\\+1100"))
-
+unique <- readRDS("~/YKim-Linguistics/ykim_korean-analysis/unique_database.rds")
 ```
 
 ```{r}
 # Creates a summation of the appearance of all the rules across the dataset - Not moving in this direction anymore, check google doc
-rules_summary <- only_U_1100 |>
-  mutate(rule_sums = map(Jamo_Rule_Matrix, ~ colSums(.x[,-1], na.rm = TRUE))) |>
-  pull(rule_sums) |>
-  bind_rows() |>
-  summarize(across(everything(), sum))
+#rules_summary <- only_U_1100 |>
+#  mutate(rule_sums = map(Jamo_Rule_Matrix, ~ colSums(.x[,-1], na.rm = TRUE))) |>
+#  pull(rule_sums) |>
+#  bind_rows() |>
+#  summarize(across(everything(), sum))
 
 ```
 
 ```{r}
 # NOT DOING THIS ANYMORE
 
-U_1100_rules_counts <- rules_summary |>
-  pivot_longer(everything(), names_to = "rule", values_to = "count")
+#U_1100_rules_counts <- rules_summary |>
+#  pivot_longer(everything(), names_to = "rule", values_to = "count")
 
-ggplot(U_1100_rules_counts, aes(x = reorder(rule, count), y = count)) +
-  geom_col() +
-  coord_flip() + 
-  labs(
-    x = "Rule",
-    y = "Counts",
-    title = "Rules in order of frequency of words/phrases containing U+1100"
-  ) +
-  theme_minimal()
+#ggplot(U_1100_rules_counts, aes(x = reorder(rule, count), y = count)) +
+#  geom_col() +
+#  coord_flip() + 
+#  labs(
+#    x = "Rule",
+#    y = "Counts",
+#    title = "Rules in order of frequency of words/phrases containing U+1100"
+#  ) +
+#  theme_minimal()
 
 ```
 
 
 ```{r}
 
-# Creates a list of all of the unique Unicodes found in the Jamo_Cleaned_Unicode, check if all are accounted for
+# creates a list of all of the existing Jamo Unicodes
 unicode_list <- unique |>
   mutate(uc = str_extract_all(Jamo_Cleaned_Unicode, "U\\+[0-9A-F]{4}")) |>
   unnest(uc) |>
   distinct(uc) |>
   pull(uc)
 
-# Turns the unique unicodes into an iterate-able list
+# preallocation of list size
 unicode_proportions <- vector("list", length(unicode_list))
 
-# Iterate through each unicode in the list and create a tibble with each unicode and their respective proportions
+# iterating through and detecting if the unicode exists within the list of unicodes of a given word
 for (i in seq_along(unicode_list)) {
   u <- unicode_list[i]
-    
   unicode_proportions[[i]] <- data.frame(
     unicode = u,
     prop_included = mean(str_detect(unique[["Jamo_Cleaned_Unicode"]], fixed(u))),
@@ -90,36 +70,73 @@ for (i in seq_along(unicode_list)) {
   )
 }
 
-# Turns tibble into a dataframe
 unicode_df <- bind_rows(unicode_proportions)
 
+# plotting data
 unicode_proportions <- ggplot(unicode_df, aes(x = reorder(unicode, prop_included), y = prop_included)) +
   geom_col() +
   coord_flip() +
   theme_minimal() +
   labs(
-    x = "Proportion Included",
-    y = "Jamo Unicode",
-    title = "Proportion of Each Unicode in the Dataset"
+    y = "Proportion Included",
+    x = "Jamo Unicode",
+    title = "Proportion of Each Jamo Unicode in the Dataset"
   )
 
 ggsave("unicode_proportions.pdf", plot = unicode_proportions, width = 8, height = 6)
 
 ```
 
+```{r}
+# creates a list of all of the existing IPA Unicodes
+ipa_unicode_list <- unique |>
+  mutate(uc = str_extract_all(IPA_Syllable_Unicode, "U\\+[0-9A-F]{4}")) |>
+  unnest(uc) |>
+  distinct(uc) |>
+  pull(uc)
+
+# preallocation of list size
+ipa_unicode_proportions <- vector("list", length(ipa_unicode_list))
+
+# iterating through and detecting if the IPA unicode exists within the list of unicodes of a given word
+for (i in seq_along(ipa_unicode_list)) {
+  u <- ipa_unicode_list[i]
+  ipa_unicode_proportions[[i]] <- data.frame(
+    unicode = u,
+    prop_included = mean(str_detect(unique[["IPA_Syllable_Unicode"]], fixed(u))),
+    stringsAsFactors = FALSE
+  )
+}
+
+ipa_unicode_df <- bind_rows(ipa_unicode_proportions)
+
+# plotting data
+ipa_unicode_proportions <- ggplot(ipa_unicode_df, aes(x = reorder(unicode, prop_included), y = prop_included)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    y = "Proportion Included",
+    x = "IPA Unicode",
+    title = "Proportion of Each IPA Unicode in the Dataset"
+  )
+
+ggsave("ipa_unicode_proportions.pdf", plot = ipa_unicode_proportions, width = 8, height = 6)
+
+```
+
+
+
 
 ```{r}
-
-
-rule_1_filtered <- unique %>% 
-  filter(!map_lgl(Jamo_Rule_Matrix, ~ any(.x[, "rule_1"] == 1)))
-
-######
-
+# creating list of names based on column names of the matrices
 rules <- colnames(unique$Jamo_Rule_Matrix[[1]])[-1]
- 
+
+# preallocation of the list of proportions
 rule_proportions <- vector("list", length(rules))
 
+
+# iterating through each rule and detecting if the matrices contain the rule
 for (i in seq_along(rules)) {
   r <- rules[i]
   
@@ -135,18 +152,351 @@ for (i in seq_along(rules)) {
 
 rule_proportion_df <- bind_rows(rule_proportions)
 
+
+# plotting df
 rule_removed_proportions <- ggplot(rule_proportion_df, aes(x = reorder(rule, prop_removed), y = prop_removed)) +
   geom_col() +
   coord_flip() +
   theme_minimal() +
   labs(
-    x = "Proportion Removed",
-    y = "Rules",
+    y = "Proportion Removed",
+    x = "Rules",
     title = "Proportion of Words Removed Upon Removing Certain Rules"
   )
 
 ggsave("rule_removed_proportions.pdf", plot = rule_removed_proportions, width = 8, height = 6)
+
 ```
+
+Working with frequency values rather than the unique word set to account for relevance and usage of certain words for more realistic distributions.
+
+```{r}
+# dataset with only values with frequency and proportions
+clean_unique <- unique |>
+  filter(!is.na(total_instances), !is.na(freq))
+
+# dataset with only values without frequency and proportions
+na_unique <- unique |>
+  filter(is.na(total_instances), is.na(freq))
+```
+
+
+```{r}
+# find frequency of each unicode
+unicode_freq <- clean_unique |>
+  mutate(uni = str_extract_all(Jamo_Cleaned_Unicode, "U\\+[0-9A-F]{4}")) |>
+  unnest(uni) |>
+  group_by(uni) |>
+  summarize(total_freq = sum(freq), .groups = "drop")
+
+# calculate the proportion
+unicode_freq <- unicode_freq |>
+  mutate(prop = total_freq / sum(total_freq))
+
+unicode_freq |>
+  summarize(sum = sum(prop))
+
+# contains 1053565	instances of all words 
+clean_unique |>
+  summarize(sum = sum(freq))
+
+# make plot based on proportions
+clean_uni_proportions <- unicode_freq |>
+  ggplot(aes(x = reorder(uni, prop), y = prop)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    x = "Unicode",
+    y = "Unicode Proportion",
+    title = "Unicode Frequency (Weighted by Word Frequencies)"
+  )
+
+ggsave("clean_uni_proportions.pdf", plot = clean_uni_proportions, width = 8, height = 6)
+
+
+clean_uni_freq <- unicode_freq |>
+  ggplot(aes(x = reorder(uni, total_freq), y = total_freq)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    x = "Unicode",
+    y = "Unicode Frequencies",
+    title = "Unicode Frequency (Weighted by Word Frequencies)"
+  )
+
+ggsave("clean_uni_frequencies.pdf", plot = clean_uni_freq, width = 8, height = 6)
+```
+
+
+```{r}
+# pull rules from Matrix column names
+clean_uni_rule_proportions <- vector("list", length(rules))
+
+# iterate through each rule and check in the word list with only frequency values to find proportion of words removed based on rule
+for (i in seq_along(rules)) {
+  r <- rules[i]
+  
+  contains_rule <- map_lgl(clean_unique$Jamo_Rule_Matrix, ~ any(.x[, r] == 1))
+  
+  total_freq <- sum(clean_unique$freq, na.rm = TRUE)
+  weighted_prop <- sum(clean_unique$freq[contains_rule], na.rm = TRUE) / total_freq
+  
+  clean_uni_rule_proportions[[i]] <- tibble(
+    rule = r,
+    prop_weighted = weighted_prop
+  )
+}
+
+clean_uni_rule_proportion_df <- bind_rows(clean_uni_rule_proportions)
+
+clean_uni_rule_prop <- clean_uni_rule_proportion_df |>
+  ggplot(aes(x = reorder(rule, prop_weighted), y = prop_weighted)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    x = "Rule",
+    y = "Rule Proportion",
+    title = "Rule Proportions Removed (Weighted by Word Frequencies)"
+  )
+
+ggsave("clean_uni_rule_prop.pdf", plot = clean_uni_rule_prop, width = 8, height = 6)
+```
+
+
+```{r}
+# GRAMMATICAL PARTS
+
+
+grammatical_parts <- clean_unique |>
+  separate_rows(품사, sep = "\\s*,\\s*") |>
+  pull(품사) |>
+  unique()
+
+# split grammatical parts into multiple rows
+clean_unique_pos <- clean_unique |>
+  separate_rows(품사, sep = "\\s*,\\s*")
+
+# total frequency per grammatical part (baseline)
+pos_totals <- clean_unique_pos |>
+  group_by(품사) |>
+  summarise(total_freq = sum(freq), .groups = "drop")
+
+# rule × 품사 proportions
+rule_pos_prop <- map_dfr(rules, function(r) {
+
+  affected <- map_lgl(
+    clean_unique_pos$Jamo_Rule_Matrix,
+    ~ any(.x[, r] == 1)
+  )
+
+  clean_unique_pos[affected, ] |>
+    group_by(품사) |>
+    summarise(removed_freq = sum(freq), .groups = "drop") |>
+    left_join(pos_totals, by = "품사") |>
+    mutate(
+      rule = r,
+      prop_removed = removed_freq / total_freq
+    ) |>
+    select(품사, rule, prop_removed)
+})
+
+
+walk(grammatical_parts, function(pos) {
+
+  p <- ggplot(
+    rule_pos_prop |> filter(품사 == pos),
+    aes(x = reorder(rule, prop_removed), y = prop_removed)
+  ) +
+    geom_col() +
+    coord_flip() +
+    theme_minimal() +
+    labs(
+      x = "Rule Removed",
+      y = "Proportion of Grammatical Part Removed",
+      title = paste("Effect of Rule Removal —", pos)
+    )
+
+  print(p)
+})
+```
+
+
+```{r}
+# 1. Explode grammatical parts and Jamo unicodes
+clean_unique_long <- clean_unique |>
+  separate_rows(품사, sep = "\\s*,\\s*") |>
+  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+") |>
+  filter(Jamo_Cleaned_Unicode != "")
+
+# 2. Baseline totals per grammatical part
+pos_totals <- clean_unique_long |>
+  group_by(품사) |>
+  summarise(
+    total_freq = sum(freq),
+    .groups = "drop"
+  )
+
+# 3. Proportion of each grammatical part removed by each Jamo unicode
+jamo_pos_prop <- clean_unique_long |>
+  group_by(품사, Jamo_Cleaned_Unicode) |>
+  summarise(
+    removed_freq = sum(freq),
+    .groups = "drop"
+  ) |>
+  left_join(pos_totals, by = "품사") |>
+  mutate(
+    prop_removed = removed_freq / total_freq
+  ) |>
+  rename(jamo_unicode = Jamo_Cleaned_Unicode)
+
+# 4. Extract grammatical parts (for plotting)
+grammatical_parts <- jamo_pos_prop |>
+  distinct(품사) |>
+  pull(품사)
+
+# 5. Plot: one plot per grammatical part
+walk(grammatical_parts, function(pos) {
+
+  df <- jamo_pos_prop |> filter(품사 == pos)
+  if (nrow(df) == 0) return(NULL)
+
+  p <- ggplot(
+    df,
+    aes(x = reorder(jamo_unicode, prop_removed),
+        y = prop_removed)
+  ) +
+    geom_col() +
+    coord_flip() +
+    theme_minimal() +
+    labs(
+      x = "Jamo Unicode Removed",
+      y = "Proportion of Grammatical Part Removed",
+      title = paste("Effect of Jamo Unicode Removal —", pos)
+    )
+
+  print(p)
+})
+
+
+```
+
+```{r}
+# WORD ORIGINS
+
+word_origins <- clean_unique |>
+  separate_rows(고유어_여부, sep = "\\s*,\\s*") |>
+  pull(고유어_여부) |>
+  unique()
+
+# split grammatical parts into multiple rows
+clean_unique_pos <- clean_unique |>
+  separate_rows(고유어_여부, sep = "\\s*,\\s*")
+
+# total frequency per grammatical part (baseline)
+pos_totals <- clean_unique_pos |>
+  group_by(고유어_여부) |>
+  summarise(total_freq = sum(freq), .groups = "drop")
+
+# rule × 품사 proportions
+rule_pos_prop <- map_dfr(rules, function(r) {
+
+  affected <- map_lgl(
+    clean_unique_pos$Jamo_Rule_Matrix,
+    ~ any(.x[, r] == 1)
+  )
+
+  clean_unique_pos[affected, ] |>
+    group_by(고유어_여부) |>
+    summarise(removed_freq = sum(freq), .groups = "drop") |>
+    left_join(pos_totals, by = "고유어_여부") |>
+    mutate(
+      rule = r,
+      prop_removed = removed_freq / total_freq
+    ) |>
+    select(고유어_여부, rule, prop_removed)
+})
+
+
+walk(word_origins, function(pos) {
+
+  p <- ggplot(
+    rule_pos_prop |> filter(고유어_여부 == pos),
+    aes(x = reorder(rule, prop_removed), y = prop_removed)
+  ) +
+    geom_col() +
+    coord_flip() +
+    theme_minimal() +
+    labs(
+      x = "Rule Removed",
+      y = "Proportion of Grammatical Part Removed",
+      title = paste("Effect of Rule Removal —", pos)
+    )
+
+  print(p)
+})
+
+```
+
+```{r}
+# 1. Explode grammatical parts and Jamo unicodes
+clean_unique_long <- clean_unique |>
+  separate_rows(고유어_여부, sep = "\\s*,\\s*") |>
+  separate_rows(Jamo_Cleaned_Unicode, sep = "\\s+") |>
+  filter(Jamo_Cleaned_Unicode != "")
+
+# 2. Baseline totals per grammatical part
+pos_totals <- clean_unique_long |>
+  group_by(고유어_여부) |>
+  summarise(
+    total_freq = sum(freq),
+    .groups = "drop"
+  )
+
+# 3. Proportion of each grammatical part removed by each Jamo unicode
+jamo_pos_prop <- clean_unique_long |>
+  group_by(고유어_여부, Jamo_Cleaned_Unicode) |>
+  summarise(
+    removed_freq = sum(freq),
+    .groups = "drop"
+  ) |>
+  left_join(pos_totals, by = "고유어_여부") |>
+  mutate(
+    prop_removed = removed_freq / total_freq
+  ) |>
+  rename(jamo_unicode = Jamo_Cleaned_Unicode)
+
+# 4. Extract grammatical parts (for plotting)
+word_origins <- jamo_pos_prop |>
+  distinct(고유어_여부) |>
+  pull(고유어_여부)
+
+# 5. Plot: one plot per grammatical part
+walk(word_origins, function(pos) {
+
+  df <- jamo_pos_prop |> filter(고유어_여부 == pos)
+  if (nrow(df) == 0) return(NULL)
+
+  p <- ggplot(
+    df,
+    aes(x = reorder(jamo_unicode, prop_removed),
+        y = prop_removed)
+  ) +
+    geom_col() +
+    coord_flip() +
+    theme_minimal() +
+    labs(
+      x = "Jamo Unicode Removed",
+      y = "Proportion of Grammatical Part Removed",
+      title = paste("Effect of Jamo Unicode Removal —", pos)
+    )
+
+  print(p)
+})
+```
+
 
 
 
